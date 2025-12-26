@@ -23,7 +23,13 @@
 #ifndef PLATFORMS_BLACKPILL_F401CC_PLATFORM_H
 #define PLATFORMS_BLACKPILL_F401CC_PLATFORM_H
 
-#define PLATFORM_IDENT      "(BlackPill-F401CC) "
+#if defined(ALTERNATIVE_PINOUT)
+#define STRINGIFY2(x) #x
+#define STRINGIFY(x)  STRINGIFY2(x)
+#define PLATFORM_IDENT "(BlackPill-F401CC Alt=" STRINGIFY(ALTERNATIVE_PINOUT) ") "
+#else
+#define PLATFORM_IDENT "(BlackPill-F401CC Alt=0) "
+#endif
 #define PLATFORM_CLOCK_FREQ RCC_CLOCK_3V3_84MHZ
 
 #include "blackpill-f4.h"

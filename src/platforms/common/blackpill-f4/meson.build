@@ -29,12 +29,20 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 probe_blackpill_variant = probe.split('-')[-1].to_upper()
+blackpill_alternative_pinout = get_option('alternative_pinout')
+
+# Build platform identifier with alternative pinout info
+if blackpill_alternative_pinout != '0'
+	platform_ident_str = f'"(BlackPill-@probe_blackpill_variant@ Alt=@blackpill_alternative_pinout@) "'
+else
+	platform_ident_str = f'"(BlackPill-@probe_blackpill_variant@ Alt=0) "'
+endif
 
 configure_file(
 	input: 'platform.h.in',
 	output: 'platform.h',
 	configuration: {
-		'PLATFORM_IDENT': f'"(BlackPill-@probe_blackpill_variant@) "',
+		'PLATFORM_IDENT': platform_ident_str,
 		'PLATFORM_CLOCK_FREQ': probe == 'blackpill-f411ce' ? 'RCC_CLOCK_3V3_96MHZ' : 'RCC_CLOCK_3V3_84MHZ',
 	},
 )
@@ -57,7 +65,6 @@ probe_blackpill_args = [
 	f'-DAPP_START=@probe_blackpill_load_address@',
 ]
 
-blackpill_alternative_pinout = get_option('alternative_pinout')
 if blackpill_alternative_pinout != '0'
 	probe_blackpill_args += [f'-DALTERNATIVE_PINOUT=@blackpill_alternative_pinout@']
 endif
