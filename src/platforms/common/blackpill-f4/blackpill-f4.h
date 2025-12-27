@@ -167,6 +167,10 @@ extern bool debug_bmp;
 #define PWR_BR_PORT PINOUT_SWITCH(GPIOA, GPIOB, GPIOA)
 #define PWR_BR_PIN  PINOUT_SWITCH(GPIO1, GPIO9, GPIO1)
 
+/* VTref sensing on PB0 (ADC12_IN8) */
+#define VTREF_PORT GPIOB
+#define VTREF_PIN  GPIO0
+
 #define USER_BUTTON_KEY_PORT GPIOA
 #define USER_BUTTON_KEY_PIN  GPIO0
 

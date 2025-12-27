@@ -39,9 +39,14 @@
 #include <libopencm3/cm3/cortex.h>
 #include <libopencm3/usb/dwc/otg_fs.h>
 #include <libopencm3/stm32/spi.h>
+#include <libopencm3/stm32/adc.h>
 
 jmp_buf fatal_error_jmpbuf;
 volatile uint32_t magic[2] __attribute__((section(".noinit")));
+
+#ifdef PLATFORM_HAS_POWER_SWITCH
+static void adc_init(void);
+#endif
 
 void platform_init(void)
 {
@@ -128,6 +133,8 @@ void platform_init(void)
 #ifdef PLATFORM_HAS_POWER_SWITCH
 	gpio_clear(PWR_BR_PORT, PWR_BR_PIN); // Set the pin of the given GPIO port to 0.
 	gpio_mode_setup(PWR_BR_PORT, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, PWR_BR_PIN);
+	/* Initialize ADC for VTref sensing */
+	adc_init();
 #endif
 
 	platform_timing_init();
@@ -158,7 +165,21 @@ bool platform_nrst_get_val(void)
 
 const char *platform_target_voltage(void)
 {
+#ifdef PLATFORM_HAS_POWER_SWITCH
+	static char voltage_string[8];
+	const uint32_t voltage = platform_target_voltage_sense();
+
+	if (voltage == 0)
+		return "Absent";
+
+	/* Format as X.XV (e.g., "3.3V") */
+	const uint32_t volts = voltage / 10U;
+	const uint32_t tenths = voltage % 10U;
+	snprintf(voltage_string, sizeof(voltage_string), "%u.%uV", (unsigned int)volts, (unsigned int)tenths);
+	return voltage_string;
+#else
 	return "Unknown";
+#endif
 }
 
 /*
@@ -185,15 +206,53 @@ bool platform_target_set_power(const bool power)
 	return true;
 }
 
+static void adc_init(void)
+{
+	/* Enable ADC1 clock */
+	rcc_periph_clock_enable(RCC_ADC1);
+
+	/* Configure PB0 as analog input */
+	gpio_mode_setup(VTREF_PORT, GPIO_MODE_ANALOG, GPIO_PUPD_NONE, VTREF_PIN);
+
+	/* Configure ADC1 */
+	adc_power_off(ADC1);
+	adc_disable_scan_mode(ADC1);
+	adc_set_single_conversion_mode(ADC1);
+	adc_disable_external_trigger_regular(ADC1);
+	adc_set_right_aligned(ADC1);
+	adc_set_sample_time_on_all_channels(ADC1, ADC_SMPR_SMP_480CYC);
+	adc_power_on(ADC1);
+
+	/* Wait for ADC to stabilize (minimum 3us for STM32F4) */
+	for (volatile size_t i = 0; i < 1000U; ++i)
+		continue;
+}
+
 /*
- * A dummy implementation of platform_target_voltage_sense as the
- * blackpill-f4 has no ability to sense the voltage on the power pin.
- * This function is only needed for implementations that allow the target
+ * VTref sensing implementation using ADC1 Channel 8 (PB0).
+ * Returns voltage in tenths of a volt (so 33 means 3.3V).
+ * This function is needed for implementations that allow the target
  * to be powered from the debug probe.
  */
 uint32_t platform_target_voltage_sense(void)
 {
-	return 0;
+	const uint8_t channel = 8; /* ADC12_IN8 = PB0 */
+	adc_set_regular_sequence(ADC1, 1, &channel);
+
+	adc_start_conversion_regular(ADC1);
+
+	/* Wait for end of conversion */
+	while (!adc_eoc(ADC1))
+		continue;
+
+	const uint32_t val = adc_read_regular(ADC1); /* 0-4095 */
+
+	/*
+	 * Assuming direct connection or 1:1 voltage divider for 3.3V max.
+	 * For simple presence/absence: if ADC reading > threshold, VTref is present.
+	 * Conversion: (val * 33) / 4095 gives voltage in 0.1V units
+	 */
+	return (val * 33U) / 4095U;
 }
 #endif
 
